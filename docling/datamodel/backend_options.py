@@ -1,4 +1,4 @@
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from typing import Annotated, Literal, Optional, Union
 
 from pydantic import AnyUrl, BaseModel, Field, SecretStr
@@ -88,6 +88,38 @@ class MsExcelBackendOptions(BaseBackendOptions):
             "cells) as TextItem instead of TableItem."
         ),
     )
+    gap_tolerance: int = Field(
+        0,
+        description=(
+            "The tolerance (in number of empty rows/columns) for merging nearby "
+            "data clusters into a single table. Default is 0 (strict)."
+        ),
+    )
+
+
+class LatexBackendOptions(BaseBackendOptions):
+    """Options specific to the LaTeX backend."""
+
+    kind: Literal["latex"] = Field("latex", exclude=True, repr=False)
+
+
+class XBRLBackendOptions(BaseBackendOptions):
+    """Options specific to the XBRL backend."""
+
+    kind: Annotated[Literal["xbrl"], Field("xbrl", exclude=True, repr=False)] = "xbrl"
+    taxonomy: Annotated[
+        Path | None,
+        Field(
+            description=(
+                "Path to a folder with the taxonomy required by the XBRL instance"
+                " reports. It should include schemas (`.xsd`) and linkbases (`.xml`)"
+                " referenced by the XBRL reports in their relative locations."
+                " Optionally, it can also include taxonomy packages (`.zip`)"
+                " referenced by the reports with absolute URLs and mapped to files"
+                " with a taxonomy catalog (`catalog.xml`) for offline parsing."
+            )
+        ),
+    ] = None
 
 
 BackendOptions = Annotated[
@@ -97,6 +129,8 @@ BackendOptions = Annotated[
         MarkdownBackendOptions,
         PdfBackendOptions,
         MsExcelBackendOptions,
+        LatexBackendOptions,
+        XBRLBackendOptions,
     ],
     Field(discriminator="kind"),
 ]

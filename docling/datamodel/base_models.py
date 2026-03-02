@@ -66,10 +66,12 @@ class InputFormat(str, Enum):
     XLSX = "xlsx"
     XML_USPTO = "xml_uspto"
     XML_JATS = "xml_jats"
+    XML_XBRL = "xml_xbrl"
     METS_GBS = "mets_gbs"
     JSON_DOCLING = "json_docling"
     AUDIO = "audio"
     VTT = "vtt"
+    LATEX = "latex"
 
 
 class OutputFormat(str, Enum):
@@ -80,6 +82,7 @@ class OutputFormat(str, Enum):
     HTML_SPLIT_PAGE = "html_split_page"
     TEXT = "text"
     DOCTAGS = "doctags"
+    VTT = "vtt"
 
 
 FormatToExtensions: dict[InputFormat, list[str]] = {
@@ -89,6 +92,7 @@ FormatToExtensions: dict[InputFormat, list[str]] = {
     InputFormat.MD: ["md"],
     InputFormat.HTML: ["html", "htm", "xhtml"],
     InputFormat.XML_JATS: ["xml", "nxml"],
+    InputFormat.XML_XBRL: ["xml", "xbrl"],
     InputFormat.IMAGE: ["jpg", "jpeg", "png", "tif", "tiff", "bmp", "webp"],
     InputFormat.ASCIIDOC: ["adoc", "asciidoc", "asc"],
     InputFormat.CSV: ["csv"],
@@ -98,6 +102,7 @@ FormatToExtensions: dict[InputFormat, list[str]] = {
     InputFormat.JSON_DOCLING: ["json"],
     InputFormat.AUDIO: ["wav", "mp3", "m4a", "aac", "ogg", "flac", "mp4", "avi", "mov"],
     InputFormat.VTT: ["vtt"],
+    InputFormat.LATEX: ["tex", "latex"],
 }
 
 FormatToMimeType: dict[InputFormat, list[str]] = {
@@ -112,6 +117,7 @@ FormatToMimeType: dict[InputFormat, list[str]] = {
     ],
     InputFormat.HTML: ["text/html", "application/xhtml+xml"],
     InputFormat.XML_JATS: ["application/xml"],
+    InputFormat.XML_XBRL: ["application/xml", "application/xhtml+xml"],
     InputFormat.IMAGE: [
         "image/png",
         "image/jpeg",
@@ -147,6 +153,7 @@ FormatToMimeType: dict[InputFormat, list[str]] = {
         "video/quicktime",
     ],
     InputFormat.VTT: ["text/vtt"],
+    InputFormat.LATEX: ["text/x-tex", "application/x-tex", "text/x-latex"],
 }
 
 MimeTypeToFormat: dict[str, list[InputFormat]] = {

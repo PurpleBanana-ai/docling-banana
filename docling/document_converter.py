@@ -12,7 +12,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Optional, Type, Union
 
-from pydantic import ConfigDict, model_validator, validate_call
+from pydantic import ConfigDict, Field, model_validator, validate_call
 from typing_extensions import Self
 
 from docling.backend.abstract_backend import (
@@ -20,10 +20,11 @@ from docling.backend.abstract_backend import (
 )
 from docling.backend.asciidoc_backend import AsciiDocBackend
 from docling.backend.csv_backend import CsvDocumentBackend
-from docling.backend.docling_parse_v4_backend import DoclingParseV4DocumentBackend
+from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
 from docling.backend.html_backend import HTMLDocumentBackend
 from docling.backend.image_backend import ImageDocumentBackend
 from docling.backend.json.docling_json_backend import DoclingJSONBackend
+from docling.backend.latex_backend import LatexDocumentBackend
 from docling.backend.md_backend import MarkdownDocumentBackend
 from docling.backend.mets_gbs_backend import MetsGbsDocumentBackend
 from docling.backend.msexcel_backend import MsExcelDocumentBackend
@@ -33,11 +34,14 @@ from docling.backend.noop_backend import NoOpBackend
 from docling.backend.webvtt_backend import WebVTTDocumentBackend
 from docling.backend.xml.jats_backend import JatsDocumentBackend
 from docling.backend.xml.uspto_backend import PatentUsptoDocumentBackend
+from docling.backend.xml.xbrl_backend import XBRLDocumentBackend
 from docling.datamodel.backend_options import (
     BackendOptions,
     HTMLBackendOptions,
+    LatexBackendOptions,
     MarkdownBackendOptions,
     PdfBackendOptions,
+    XBRLBackendOptions,
 )
 from docling.datamodel.base_models import (
     BaseFormatOption,
@@ -52,7 +56,7 @@ from docling.datamodel.document import (
     InputDocument,
     _DocumentConversionInput,
 )
-from docling.datamodel.pipeline_options import PipelineOptions
+from docling.datamodel.pipeline_options import ConvertPipelineOptions, PipelineOptions
 from docling.datamodel.settings import (
     DEFAULT_PAGE_RANGE,
     DocumentLimits,
@@ -129,6 +133,12 @@ class XMLJatsFormatOption(FormatOption):
     backend: Type[AbstractDocumentBackend] = JatsDocumentBackend
 
 
+class XBRLFormatOption(FormatOption):
+    pipeline_cls: Type = SimplePipeline
+    backend: Type[AbstractDocumentBackend] = XBRLDocumentBackend
+    backend_options: XBRLBackendOptions | None = None
+
+
 class ImageFormatOption(FormatOption):
     pipeline_cls: Type = StandardPdfPipeline
     backend: Type[AbstractDocumentBackend] = ImageDocumentBackend
@@ -136,13 +146,21 @@ class ImageFormatOption(FormatOption):
 
 class PdfFormatOption(FormatOption):
     pipeline_cls: Type = StandardPdfPipeline
-    backend: Type[AbstractDocumentBackend] = DoclingParseV4DocumentBackend
+    backend: Type[AbstractDocumentBackend] = DoclingParseDocumentBackend
     backend_options: Optional[PdfBackendOptions] = None
 
 
 class AudioFormatOption(FormatOption):
     pipeline_cls: Type = AsrPipeline
     backend: Type[AbstractDocumentBackend] = NoOpBackend
+
+
+class LatexFormatOption(FormatOption):
+    """Format options for LaTeX documents."""
+
+    pipeline_cls: Type = SimplePipeline
+    backend: Type[AbstractDocumentBackend] = LatexDocumentBackend
+    backend_options: Optional[LatexBackendOptions] = None
 
 
 def _get_default_option(format: InputFormat) -> FormatOption:
@@ -156,6 +174,7 @@ def _get_default_option(format: InputFormat) -> FormatOption:
         InputFormat.HTML: HTMLFormatOption(),
         InputFormat.XML_USPTO: PatentUsptoFormatOption(),
         InputFormat.XML_JATS: XMLJatsFormatOption(),
+        InputFormat.XML_XBRL: XBRLFormatOption(),
         InputFormat.METS_GBS: FormatOption(
             pipeline_cls=StandardPdfPipeline, backend=MetsGbsDocumentBackend
         ),
@@ -168,6 +187,7 @@ def _get_default_option(format: InputFormat) -> FormatOption:
         InputFormat.VTT: FormatOption(
             pipeline_cls=SimplePipeline, backend=WebVTTDocumentBackend
         ),
+        InputFormat.LATEX: LatexFormatOption(),
     }
     if (options := format_to_default_options.get(format)) is not None:
         return options

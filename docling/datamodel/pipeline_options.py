@@ -22,6 +22,11 @@ from docling.datamodel import (
 
 # Import the following for backwards compatibility
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+from docling.datamodel.chart_extraction_options import (
+    ChartExtractionModelKind,
+    ChartExtractionModelOptions,
+)
+from docling.datamodel.kserve_v2_options import KserveV2OptionsMixin
 from docling.datamodel.layout_model_specs import (
     DOCLING_LAYOUT_EGRET_LARGE,
     DOCLING_LAYOUT_EGRET_MEDIUM,
@@ -512,6 +517,55 @@ class OcrMacOptions(OcrOptions):
     )
 
 
+class KserveV2OcrOptions(OcrOptions, KserveV2OptionsMixin):
+    """Configuration for KServe v2-based OCR (e.g., Triton Inference Server).
+
+    This OCR engine connects to a remote KServe v2-compatible inference server
+    (such as Triton) to perform OCR via gRPC or HTTP. It combines standard OCR
+    options with KServe v2 connection settings inherited from KserveV2OptionsMixin.
+
+    The engine handles custom preprocessing (RGB conversion, transpose, batching)
+    to match the expected input format of typical OCR models deployed on KServe v2
+    endpoints.
+
+    See Also:
+        `KserveV2OptionsMixin`: Provides all KServe v2 connection configuration.
+        `RapidOcrOptions`: Local OCR engine for comparison.
+    """
+
+    kind: ClassVar[Literal["kserve_v2_ocr"]] = "kserve_v2_ocr"
+
+    model_name: str = Field(
+        default="ocr",
+        description="Remote model name registered in the KServe v2 endpoint.",
+    )
+
+    lang: Annotated[
+        list[str],
+        Field(
+            description=(
+                "List of OCR languages. Note: Language selection depends on the deployed model. "
+                "This parameter is passed to the server but may not be used by all models."
+            )
+        ),
+    ] = ["english", "chinese"]
+
+    scale: Annotated[
+        float,
+        Field(
+            description=(
+                "Image scale multiplier for OCR processing. Higher values increase resolution "
+                "for better text recognition. Default 2.0 converts 72 DPI to 144 DPI."
+            ),
+            gt=0.0,
+        ),
+    ] = 2.0
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+
+
 class PictureDescriptionBaseOptions(BaseOptions):
     """Base configuration for picture description models.
 
@@ -901,6 +955,9 @@ VlmConvertOptions.register_preset(stage_model_specs.VLM_CONVERT_QWEN)
 VlmConvertOptions.register_preset(stage_model_specs.VLM_CONVERT_GEMMA_12B)
 VlmConvertOptions.register_preset(stage_model_specs.VLM_CONVERT_GEMMA_27B)
 VlmConvertOptions.register_preset(stage_model_specs.VLM_CONVERT_DOLPHIN)
+VlmConvertOptions.register_preset(stage_model_specs.VLM_CONVERT_GLMOCR)
+VlmConvertOptions.register_preset(stage_model_specs.VLM_CONVERT_LIGHTONOCR)
+VlmConvertOptions.register_preset(stage_model_specs.VLM_CONVERT_FALCON_OCR)
 
 # Register PictureDescription presets (for new runtime-based implementation)
 PictureDescriptionVlmEngineOptions.register_preset(
@@ -1149,9 +1206,25 @@ class ConvertPipelineOptions(PipelineOptions):
         ),
     ] = _default_picture_description_options
 
-    do_chart_extraction: bool = (
-        False  # True: extract data in tabular format from bar-, pie and line-charts
-    )
+    do_chart_extraction: Annotated[
+        bool,
+        Field(
+            description=(
+                "Enable chart data extraction to convert bar, pie, and line charts into structured tabular data. "
+                "Automatically enables picture classification. "
+                "Only applicable when `do_chart_extraction=True`."
+            )
+        ),
+    ] = False
+    chart_extraction_options: Annotated[
+        ChartExtractionModelOptions,
+        Field(
+            description=(
+                "Configuration for the chart extraction model, including which model variant to use "
+                "and which output formats to generate (CSV, code, summary)."
+            )
+        ),
+    ] = ChartExtractionModelOptions()
 
 
 class PaginatedPipelineOptions(ConvertPipelineOptions):

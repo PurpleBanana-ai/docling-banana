@@ -21,6 +21,8 @@ from pylatexenc.latexwalker import (
 from docling.backend.latex.constants import (
     MACROS_CITATION,
     MACROS_ESCAPED,
+    MACROS_IGNORED,
+    MACROS_SPACING,
     MACROS_STRUCTURAL,
     MACROS_TEXT_FORMATTING,
 )
@@ -29,6 +31,7 @@ from docling.backend.latex.constants import (
 class TextHelperMixin:
     if TYPE_CHECKING:
         _custom_macros: dict[str, str]
+        _custom_macro_num_args: dict[str, int]
 
         def _process_nodes(
             self,
@@ -40,6 +43,10 @@ class TextHelperMixin:
         ) -> None: ...
         def _extract_macro_arg(self, node: "Any") -> str: ...
         def _expand_macros(self, latex_str: str) -> str: ...
+        def _expand_custom_macro_invocation(
+            self, node: "Any", following_nodes: "Any"
+        ) -> tuple[str, int]: ...
+        def _parse_latex_fragment_to_text(self, latex_fragment: str) -> str: ...
 
     def _process_chars_node(
         self,
@@ -102,7 +109,10 @@ class TextHelperMixin:
     def _nodes_to_text(self, nodes) -> str:
         text_parts = []
 
-        for node in nodes:
+        idx = 0
+        while idx < len(nodes):
+            node = nodes[idx]
+            consumed_following = 0
             if isinstance(node, LatexCharsNode):
                 text_parts.append(node.chars)
 
@@ -129,8 +139,20 @@ class TextHelperMixin:
                 elif node.macroname in MACROS_ESCAPED:
                     text_parts.append(node.macroname)
                 elif node.macroname in self._custom_macros:
-                    expansion = self._custom_macros[node.macroname]
-                    text_parts.append(expansion)
+                    expansion, consumed_following = (
+                        self._expand_custom_macro_invocation(node, nodes[idx + 1 :])
+                    )
+                    if self._custom_macro_num_args.get(node.macroname, 0) > 0:
+                        text_parts.append(self._parse_latex_fragment_to_text(expansion))
+                    else:
+                        text_parts.append(expansion)
+                elif (
+                    node.macroname in MACROS_SPACING or node.macroname in MACROS_IGNORED
+                ):
+                    # Spacing and ignored commands are silently discarded along
+                    # with their arguments to prevent values like "-1mm" leaking
+                    # as plain text (e.g. from \vspace{-1mm}, \hspace{0.2cm})
+                    pass
                 else:
                     arg_parts = []
                     if node.nodeargd and node.nodeargd.argnlist:
@@ -155,6 +177,7 @@ class TextHelperMixin:
                     text_parts.append(node.latex_verbatim())
                 else:
                     text_parts.append(self._nodes_to_text(node.nodelist))
+            idx += 1 + consumed_following
 
         result = "".join(text_parts)
         result = re.sub(r" +", " ", result)

@@ -1,3 +1,76 @@
+## [v2.86.0](https://github.com/docling-project/docling/releases/tag/v2.86.0) - 2026-04-10
+
+### Feature
+
+* Support for GraniteVision v4 ([#3217](https://github.com/docling-project/docling/issues/3217)) ([`fd83420`](https://github.com/docling-project/docling/commit/fd834204fadcb15190f3f2c289841143773b5f9d))
+* Add signature/stamp html block to DC document ([#3251](https://github.com/docling-project/docling/issues/3251)) ([`9b4b67b`](https://github.com/docling-project/docling/commit/9b4b67b23e77d6d9063ee141196707412bde1673))
+* **vlm:** Add PARTIAL_SUCCESS status for VLM pipeline pages ([#3215](https://github.com/docling-project/docling/issues/3215)) ([`6699642`](https://github.com/docling-project/docling/commit/6699642fa081a9cb50869c4d1206f9d7c89b782d))
+
+### Fix
+
+* **latex:** Discard arguments of filtered spacing commands ([#3245](https://github.com/docling-project/docling/issues/3245)) ([`6180925`](https://github.com/docling-project/docling/commit/61809252eccc09d6af05530fd8921a4cdb46edcc))
+
+### Documentation
+
+* Chart understanding in README ([#3253](https://github.com/docling-project/docling/issues/3253)) ([`d5af473`](https://github.com/docling-project/docling/commit/d5af473a70345e7f5ba405e8570ef350c65700ea))
+
+## [v2.85.0](https://github.com/docling-project/docling/releases/tag/v2.85.0) - 2026-04-07
+
+### Feature
+
+* Add support for Falcon-OCR ([#3237](https://github.com/docling-project/docling/issues/3237)) ([`d0e19be`](https://github.com/docling-project/docling/commit/d0e19be14ff3dbe8d44b5bf8bfe4cf53b58249f6))
+* Add support for LightOnOCR-2-1B ([#3213](https://github.com/docling-project/docling/issues/3213)) ([`f2affd7`](https://github.com/docling-project/docling/commit/f2affd76149aa7c1ed84df1e84ef537f3905559b))
+
+### Fix
+
+* **latex:** Expand custom macro parameters ([#3223](https://github.com/docling-project/docling/issues/3223)) ([`77a2505`](https://github.com/docling-project/docling/commit/77a2505bc2da4b8eede604071978cebf33addaa5))
+
+## [v2.84.0](https://github.com/docling-project/docling/releases/tag/v2.84.0) - 2026-04-01
+
+### Feature
+
+* Glm ocr ([#3146](https://github.com/docling-project/docling/issues/3146)) ([`a9265d8`](https://github.com/docling-project/docling/commit/a9265d854a195993d2e63bfc8c4bb2f76be7f9d9))
+* Switch to the latest version of DocumentFigureClassifier model v2.5 ([#3171](https://github.com/docling-project/docling/issues/3171)) ([`d046390`](https://github.com/docling-project/docling/commit/d046390bf4bff2c538cb33eebb03dce56d122d37))
+* Remove the deprecation of extraction ([#3220](https://github.com/docling-project/docling/issues/3220)) ([`e9a39e8`](https://github.com/docling-project/docling/commit/e9a39e872048f31b57402926ae3a40c05b7d24d0))
+
+## [v2.83.0](https://github.com/docling-project/docling/releases/tag/v2.83.0) - 2026-03-31
+
+### Feature
+
+* Upgrade to transformers v5 ([#3200](https://github.com/docling-project/docling/issues/3200)) ([`d2c6357`](https://github.com/docling-project/docling/commit/d2c6357982d79629440919188d73bda18bc678c8))
+* OCR model for remote KServe v2 API ([#3189](https://github.com/docling-project/docling/issues/3189)) ([`8522b00`](https://github.com/docling-project/docling/commit/8522b00146a2217760ad1944934926ed0e9f5d39))
+
+### Fix
+
+* **pdf:** Propagate hyperlinks to DoclingDocument text items ([#3131](https://github.com/docling-project/docling/issues/3131)) ([`524edcc`](https://github.com/docling-project/docling/commit/524edcce73869a87b6ccf73bc16324742bd36648))
+* **xlsx:** Guard last-row bounds in Excel table scan ([#3197](https://github.com/docling-project/docling/issues/3197)) ([`85ac377`](https://github.com/docling-project/docling/commit/85ac3775148494e2767bbe17ce8d7a28a8baf6b6))
+* Parse LaTeX macros in multicolumn/multirow table cells ([#3204](https://github.com/docling-project/docling/issues/3204)) ([`89c68f8`](https://github.com/docling-project/docling/commit/89c68f8ec373c6012c963a39ea70f5c122e0e779))
+* Handle empty CSV file without crashing ([#3196](https://github.com/docling-project/docling/issues/3196)) ([`f283484`](https://github.com/docling-project/docling/commit/f2834848aeaa63ac51f4968e1665b6b8e77b90e4))
+
+### Documentation
+
+* Add line-based chunker documentation and examples ([#3210](https://github.com/docling-project/docling/issues/3210)) ([`3a64f41`](https://github.com/docling-project/docling/commit/3a64f41af86c90af71d6befe619f9f5a12a26e5f))
+
+## [v2.82.0](https://github.com/docling-project/docling/releases/tag/v2.82.0) - 2026-03-25
+
+### Feature
+
+* Implementation of HTML backend with headless browser ([#2969](https://github.com/docling-project/docling/issues/2969)) ([`1c74a9b`](https://github.com/docling-project/docling/commit/1c74a9b9c7c2019b85abef8f0f94381a83b721df))
+
+### Fix
+
+* **omml:** Correct LaTeX output for fractions, math operators, and functions ([#3122](https://github.com/docling-project/docling/issues/3122)) ([`e36125b`](https://github.com/docling-project/docling/commit/e36125ba2ddfbe584fc752e6dc7ca0f0f8f58d87))
+* Manage PDFium backend resource lifecycles to avoid SIGSEGV/SIGTRAP crashes ([#3180](https://github.com/docling-project/docling/issues/3180)) ([`a0fc3c9`](https://github.com/docling-project/docling/commit/a0fc3c9d731c29f896680b17fa6df5549e2dfc5d))
+* **docx:** Split multiple OMML equations into separate formula items ([#3123](https://github.com/docling-project/docling/issues/3123)) ([`90d6dd4`](https://github.com/docling-project/docling/commit/90d6dd4e87d96167aced588249dcb2e0f47cd68f))
+* Let user params override engine defaults in API VLM engine ([#3116](https://github.com/docling-project/docling/issues/3116)) ([`fdf5e20`](https://github.com/docling-project/docling/commit/fdf5e20ccd8ae85ea73effa6c743910ed295564d))
+* **vlm:** Handle content_filter finish reason in API responses ([#3051](https://github.com/docling-project/docling/issues/3051)) ([`f0e3d1d`](https://github.com/docling-project/docling/commit/f0e3d1df2a086710d5c9629426595f5d54ed65aa))
+* **cli:** Avoid generating images for non-image exports ([#3127](https://github.com/docling-project/docling/issues/3127)) ([`5473e07`](https://github.com/docling-project/docling/commit/5473e074505e0bd46985683800fa8f929fd53492))
+* Honor picture description batching and scale options ([#3132](https://github.com/docling-project/docling/issues/3132)) ([`9abf0fd`](https://github.com/docling-project/docling/commit/9abf0fd3851429183debfb90e2a9f975c9654beb))
+
+### Documentation
+
+* Fix Erroneous vLLM VLM pipeline engine option params causing empty/bad responses ([#3167](https://github.com/docling-project/docling/issues/3167)) ([`fffd445`](https://github.com/docling-project/docling/commit/fffd4457892002f5668e3a37b3c7a79e36936405))
+
 ## [v2.81.0](https://github.com/docling-project/docling/releases/tag/v2.81.0) - 2026-03-20
 
 ### Feature

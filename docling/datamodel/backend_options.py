@@ -134,6 +134,34 @@ class MarkdownBackendOptions(BaseBackendOptions):
             "will use it to resolve relative paths in the markdown document."
         ),
     )
+    max_image_data_base64_bytes: PositiveInt = Field(
+        20 * 1024 * 1024,  # 20 MB
+        description="The maximum number of base64 data bytes that the backend will accept.",
+    )
+
+
+class EpubBackendOptions(BaseBackendOptions):
+    """Options specific to the EPUB backend."""
+
+    kind: Annotated[Literal["epub"], Field(exclude=True, repr=False)] = "epub"
+    fetch_images: Annotated[
+        bool, Field(description="Whether to fetch and process images from the EPUB.")
+    ] = False
+    max_total_bytes: Annotated[
+        PositiveInt,
+        Field(
+            description="Maximum cumulative size in bytes of all data extracted from the EPUB archive during processing"
+        ),
+    ] = 100 * 1024 * 1024  # 100 MB
+    max_file_bytes: Annotated[
+        PositiveInt,
+        Field(
+            description="Maximum size in bytes for any single file extracted from the EPUB archive"
+        ),
+    ] = 10 * 1024 * 1024  # 10 MB
+    max_member_count: Annotated[
+        PositiveInt, Field(description="Maximum number of archive members to process")
+    ] = 1000
 
 
 class PdfBackendOptions(BaseBackendOptions):
@@ -141,6 +169,14 @@ class PdfBackendOptions(BaseBackendOptions):
 
     kind: Literal["pdf"] = Field("pdf", exclude=True, repr=False)
     password: Optional[SecretStr] = None
+    enforce_same_font: bool = Field(
+        True,
+        description=(
+            "Whether docling-parse should split text cells at font boundaries. "
+            "Disable this when PDFs use separate fonts for base glyphs and "
+            "diacritics that should remain in the same text cell."
+        ),
+    )
 
 
 class ThreadedDoclingParseBackendOptions(PdfBackendOptions):
@@ -198,6 +234,29 @@ class MsExcelBackendOptions(BaseBackendOptions):
             "cells) as TextItem instead of TableItem."
         ),
     )
+
+    parse_charts: bool = Field(
+        True,
+        description=(
+            "Whether to parse native charts embedded in worksheets and chart "
+            "sheets. Each chart becomes a PictureItem classified by chart type "
+            "(bar, line, pie, scatter) and carrying the chart's underlying data "
+            "reconstructed as a table. Set to False to skip chart parsing."
+        ),
+    )
+
+    render_chart_images: bool = Field(
+        False,
+        description=(
+            "Whether to render an image for each native chart and attach it to "
+            "the chart PictureItem. The chart is isolated into a temporary "
+            "workbook and rasterized with LibreOffice, the same external tool "
+            "used for EMF/WMF images. Opt-in (default False) because it "
+            "requires a LibreOffice installation and inflates the output size. "
+            "Only takes effect when parse_charts is True."
+        ),
+    )
+
     gap_tolerance: int = Field(
         0,
         description=(
@@ -214,6 +273,79 @@ class MsExcelBackendOptions(BaseBackendOptions):
             "Set to None (default) to include all sheets."
         ),
     )
+
+
+class MsPowerpointBackendOptions(BaseBackendOptions):
+    """Options specific to the MS PowerPoint backend."""
+
+    kind: Literal["pptx"] = Field("pptx", exclude=True, repr=False)
+
+    render_chart_images: bool = Field(
+        False,
+        description=(
+            "Whether to render an image for each native chart and attach it to "
+            "the chart PictureItem. The chart's slide is isolated into a "
+            "temporary presentation and rasterized with LibreOffice, the same "
+            "external tool used for EMF/WMF images. Opt-in (default False) "
+            "because it requires a LibreOffice installation and inflates the "
+            "output size. Charts always keep their classification and "
+            "reconstructed tabular data regardless of this option."
+        ),
+    )
+
+
+class MsWordBackendOptions(BaseBackendOptions):
+    """Options specific to the MS Word backend."""
+
+    kind: Literal["docx"] = Field("docx", exclude=True, repr=False)
+
+    render_chart_images: bool = Field(
+        False,
+        description=(
+            "Whether to render an image for each native chart and attach it to "
+            "the chart PictureItem. The chart drawing is isolated into a "
+            "temporary document and rasterized with LibreOffice, the same "
+            "external tool used for EMF/WMF images. Opt-in (default False) "
+            "because it requires a LibreOffice installation and inflates the "
+            "output size. Charts always keep their classification and "
+            "reconstructed tabular data regardless of this option."
+        ),
+    )
+
+
+class OdsBackendOptions(BaseBackendOptions):
+    """Options specific to the ODS (OpenDocument Spreadsheet) backend."""
+
+    kind: Annotated[Literal["ods"], Field(exclude=True, repr=False)] = "ods"
+    treat_singleton_as_text: Annotated[
+        bool,
+        Field(
+            description=(
+                "Whether to treat singleton cells (1x1 tables with empty neighboring "
+                "cells) as TextItem instead of TableItem."
+            )
+        ),
+    ] = False
+    gap_tolerance: Annotated[
+        int,
+        Field(
+            description=(
+                "The tolerance (in number of empty rows/columns) for merging nearby "
+                "data clusters into a single table. Default is 0 (strict)."
+            )
+        ),
+    ] = 0
+    sheet_names: Annotated[
+        Optional[list[str]],
+        Field(
+            description=(
+                "An optional list of sheet names to include in conversion. "
+                "When set, only sheets whose names appear in this list will be processed. "
+                "Sheet names are matched case-sensitively. "
+                "Set to None (default) to include all sheets."
+            )
+        ),
+    ] = None
 
 
 class LatexBackendOptions(BaseBackendOptions):
@@ -270,12 +402,16 @@ class XBRLBackendOptions(BaseBackendOptions):
 BackendOptions = Annotated[
     Union[
         DeclarativeBackendOptions,
+        EpubBackendOptions,
         HTMLBackendOptions,
         MarkdownBackendOptions,
         PdfBackendOptions,
         ThreadedDoclingParseBackendOptions,
         MetsGbsBackendOptions,
         MsExcelBackendOptions,
+        MsPowerpointBackendOptions,
+        MsWordBackendOptions,
+        OdsBackendOptions,
         LatexBackendOptions,
         XBRLBackendOptions,
     ],

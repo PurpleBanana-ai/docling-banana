@@ -2,7 +2,11 @@
 
 from docling.datamodel.service.requests import (
     AnyHttpSourceRequest,
+    BatchSourceRequestInput,
     BatchSourceRequestItem,
+    BatchTargetRequestInput,
+    GenericSourceRequest,
+    GenericTargetRequest,
     S3SourceRequest,
 )
 from docling.datamodel.service.responses import (
@@ -10,6 +14,7 @@ from docling.datamodel.service.responses import (
     PresignedUrlConvertResponse,
 )
 from docling.datamodel.service.targets import PresignedUrlTarget, S3Target
+from docling.service_client._async_client import AsyncDoclingServiceClient
 from docling.service_client.client import (
     DEFAULT_MAX_CONCURRENCY,
     MAX_CONCURRENCY_LIMIT,
@@ -20,33 +25,44 @@ from docling.service_client.client import (
     StatusWatcherKind,
 )
 from docling.service_client.exceptions import (
+    ArtifactDownloadError,
     ConversionError,
     DoclingServiceClientError,
+    ResponseSchemaMismatchError,
     ResultExpiredError,
     ResultNotReadyError,
     ServiceError,
     ServiceUnavailableError,
+    TaskExecutionError,
     TaskNotFoundError,
     TaskTimeoutError,
     UsageLimitExceededError,
 )
-from docling.service_client.job import ConversionJob
+from docling.service_client.job import AsyncConversionJob, ConversionJob
 
 __all__ = [
     "DEFAULT_MAX_CONCURRENCY",
     "MAX_CONCURRENCY_LIMIT",
     "AnyHttpSourceRequest",
+    "ArtifactDownloadError",
+    "AsyncConversionJob",
+    "AsyncDoclingServiceClient",
+    "BatchSourceRequestInput",
     "BatchSourceRequestItem",
+    "BatchTargetRequestInput",
     "ChunkerKind",
     "ConversionError",
     "ConversionItem",
     "ConversionJob",
     "DoclingServiceClient",
     "DoclingServiceClientError",
+    "GenericSourceRequest",
+    "GenericTargetRequest",
     "PresignedUrlConvertDocumentResponse",
     "PresignedUrlConvertResponse",
     "PresignedUrlTarget",
     "RawServiceResult",
+    "ResponseSchemaMismatchError",
     "ResultExpiredError",
     "ResultNotReadyError",
     "S3SourceRequest",
@@ -54,6 +70,7 @@ __all__ = [
     "ServiceError",
     "ServiceUnavailableError",
     "StatusWatcherKind",
+    "TaskExecutionError",
     "TaskNotFoundError",
     "TaskTimeoutError",
     "UsageLimitExceededError",

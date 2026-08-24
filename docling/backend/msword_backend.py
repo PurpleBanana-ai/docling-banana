@@ -425,6 +425,9 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
         self.listIter = 0
         # Track list counters per numId and ilvl
         self.list_counters: dict[tuple[int, int], int] = {}
+        # numIds already opened in this document. Word numbers continuously
+        # per numId, so a numId that reappears is a resumed list, not a new one
+        self.started_numids: set[int] = set()
         # Track the last numId to handle list continuation after interruptions
         self.last_numid: int | None = None
         # Track the last list group and its parent to reuse only in same context
@@ -638,6 +641,17 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
         self.last_list_group_numid = None
         self.last_list_group_parent = None
 
+    def _end_list_on_body_text(self, text: str) -> None:
+        """Drop the cached list group once body text follows a list.
+
+        A blank spacer paragraph between a list item and this text closes the
+        list but keeps the group cached, so a later item would re-open a group
+        that now sits *before* this paragraph and the text would be rendered
+        after the whole list.
+        """
+        if text:
+            self._clear_list_group_cache()
+
     @contextmanager
     def _isolated_list_context(self):
         """Preserve list state during table cell processing.
@@ -769,6 +783,18 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
                     added_elements.extend(t)
                 except Exception:
                     _log.debug("could not parse a table, broken docx table")
+            # Check for the sdt containers, like table of contents.
+            # This must come before the image branches: they are computed with
+            # descendant XPaths, so a control holding a picture anywhere inside
+            # would match there and its paragraphs would never be walked.
+            elif tag_name == "sdt":
+                sdt_content = element.find(
+                    "./w:sdtContent", namespaces=MsWordDocumentBackend._BLIP_NAMESPACES
+                )
+                if sdt_content is not None:
+                    # Recursively walk the SDT content to catch textboxes, tables, and nested structures
+                    _, te = self._walk_linear(sdt_content, doc)
+                    added_elements.extend(te)
             # Check for Image
             elif drawing_blip:
                 pics = self._handle_pictures(drawing_blip, doc)
@@ -841,15 +867,6 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
                     is not None
                 ):
                     te = self._handle_text_elements(element, doc, skip_empty_text=True)
-                    added_elements.extend(te)
-            # Check for the sdt containers, like table of contents
-            elif tag_name == "sdt":
-                sdt_content = element.find(
-                    "./w:sdtContent", namespaces=MsWordDocumentBackend._BLIP_NAMESPACES
-                )
-                if sdt_content is not None:
-                    # Recursively walk the SDT content to catch textboxes, tables, and nested structures
-                    _, te = self._walk_linear(sdt_content, doc)
                     added_elements.extend(te)
             # Check for Text
             elif tag_name == "p":
@@ -1086,16 +1103,17 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
             numid, ilvl or 0
         )
 
-    def _get_outline_level_from_style(self, paragraph: Paragraph) -> int | None:
-        """Extract outlineLvl from paragraph's style definition.
+    def _get_outline_level_from_style(self, style: ParagraphStyle | None) -> int | None:
+        """Extract outlineLvl from a paragraph style definition.
 
-        In OOXML, outlineLvl is 0-indexed (0-8 for heading levels 1-9).
-        This method returns the 1-indexed heading level (outlineLvl + 1).
+        In OOXML, outlineLvl is 0-indexed: 0-8 are heading levels 1-9 and 9 is
+        the "body text" sentinel. This method returns the 1-indexed value
+        (outlineLvl + 1), so heading levels are 1-9 and body text is 10.
         """
-        if paragraph.style is None:
+        if style is None:
             return None
 
-        style_elem = paragraph.style.element
+        style_elem = style.element
         if style_elem is None:
             return None
 
@@ -1307,6 +1325,18 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
         return not self._is_in_table_cell(paragraph)
 
     def _get_label_and_level(self, paragraph: Paragraph) -> tuple[str, int | None]:
+        """Classify a paragraph as a heading, code block or plain text.
+
+        Heading detection has two independent signals. The style *name* carries
+        the level for the usual English styles, while ``w:outlineLvl`` is
+        OOXML's own heading marker and is language-independent, which is what
+        makes localized styles (e.g. Czech ``Nadpis1``) resolvable at all. The
+        outline level therefore wins over name parsing when it denotes a real
+        heading, and it is also honoured on its own for styles that are not
+        recognizable by name. ``Title`` styles are left out of the latter so
+        they keep reaching their own branch; in practice they never carry
+        ``w:outlineLvl`` anyway.
+        """
         # Resolve the style once: python-docx's ``paragraph.style`` scans all
         # styles on every access, so re-reading it per predicate is costly.
         style = paragraph.style
@@ -1337,9 +1367,13 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
             or (base_style_name and "heading" in base_style_name.lower())
         )
 
+        # 1-9 are real heading levels; 10 is the "body text" sentinel.
+        outline_level = self._get_outline_level_from_style(style)
+        if outline_level is not None and not 1 <= outline_level <= 9:
+            outline_level = None
+
         if is_heading:
-            # First try to get the level from outlineLvl (authoritative source)
-            outline_level = self._get_outline_level_from_style(paragraph)
+            # The outline level is authoritative when it denotes a heading.
             if outline_level is not None:
                 return "Heading", outline_level
 
@@ -1356,7 +1390,26 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
         if self._is_code_style(style) or self._is_code_by_font(paragraph, style):
             return "Code", None
 
+        if outline_level is not None and not self._is_title_style(
+            label, name, base_style_label, base_style_name
+        ):
+            return "Heading", outline_level
+
         return label, None
+
+    @staticmethod
+    def _is_title_style(*labels: str | None) -> bool:
+        """Whether any of the given style ids/names denotes a title style.
+
+        Matches on the ``"title"`` substring, which reliably covers the
+        English built-in ``Title`` style.  Localized equivalents (e.g.
+        ``"Titre"``, ``"Titel"``) do not contain the substring and would
+        not be excluded — but that gap is acceptable in practice because
+        neither Word nor LibreOffice writes ``w:outlineLvl`` on a Title
+        style, so the condition this guard protects is unreachable for
+        real documents.
+        """
+        return any("title" in label.lower() for label in labels if label)
 
     @classmethod
     def _get_format_from_run(
@@ -2176,6 +2229,7 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
             # barrier armed.
 
         else:
+            self._end_list_on_body_text(text)
             level = self._get_level()
             parent = self._create_or_reuse_parent(
                 doc=doc,
@@ -2425,6 +2479,15 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
         It determines whether to open a new list, continue an existing one, handle
         indentation changes, or close lists based on the numbering context.
 
+        Contract with interleaved blocks: Word numbers list items continuously
+        per ``w:numId``, so items sharing a numId belong to the same list even
+        when paragraphs of a different numId (for example a bullet list placed
+        between two ordered items) appear in between. Counters are therefore
+        reset only the first time a numId is opened -- tracked in
+        ``self.started_numids`` -- so a numId that reappears after an
+        intervening block resumes its numbering instead of restarting at 1
+        (see #3896).
+
         Args:
             doc: The DoclingDocument being constructed.
             numid: The numbering ID from the DOCX paragraph properties.
@@ -2442,9 +2505,12 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
             self._prev_numid() == numid and self.level_at_new_list is None
         ):  # Open new list
             self.level_at_new_list = level
-            # Only reset counters if this is a truly new list (different numId)
-            if self.last_numid != numid:
+            # Only reset counters the first time a numId is opened. A numId
+            # that reappears after an intervening list of a different numId is
+            # the same Word list resuming, and must keep its numbering.
+            if numid not in self.started_numids:
                 self._reset_list_counters_for_new_sequence(numid)
+                self.started_numids.add(numid)
 
             list_gr = self._get_or_create_list_group(
                 doc=doc,
@@ -2469,7 +2535,7 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
             ):
                 list_gr1 = doc.add_list_group(
                     name="list",
-                    parent=self.parents[i - 1],
+                    parent=self.parents.get(i - 1),
                     content_layer=self.content_layer,
                 )
                 self.parents[i] = list_gr1
@@ -2506,14 +2572,17 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
                 use_level = level
                 self.level_at_new_list = use_level
 
-            # Only reset counters if this is a different numId
-            if self.last_numid != numid:
+            # Only reset counters the first time a numId is opened. A numId
+            # that reappears after an intervening list of a different numId is
+            # the same Word list resuming, and must keep its numbering.
+            if numid not in self.started_numids:
                 self._reset_list_counters_for_new_sequence(numid)
+                self.started_numids.add(numid)
 
             list_gr = self._get_or_create_list_group(
                 doc=doc,
                 numid=numid,
-                parent=self.parents[use_level - 1],
+                parent=self.parents.get(use_level - 1),
                 elem_ref=elem_ref,
             )
 
@@ -3474,74 +3543,76 @@ class MsWordDocumentBackend(DeclarativeDocumentBackend):
 
         Headers and footers are added in the furniture content and only the text paragraphs
         are parsed. The paragraphs are attached to a single group item for the header or the
-        footer. If the document has a section with new header and footer, they will be parsed
-        in new group items.
+        footer. Every section is visited; a header/footer definition that is inherited
+        ("linked to previous") from an already-emitted section is skipped so it is not
+        duplicated. Sections with different_first_page_header_footer contribute both their
+        first-page and their regular header/footer, since both are actually used.
 
         Args:
             docx_obj: A docx Document object to be parsed.
             doc: A DoclingDocument object to add the header and footer from docx_obj.
         """
         current_layer = self.content_layer
-        base_parent = self.parents[0]
+        base_parents = dict(self.parents)
+        base_level = self.level
         self.content_layer = ContentLayer.FURNITURE
 
         txbx_xpath = etree.XPath(
             ".//w:txbxContent|.//v:textbox//w:p|.//wps:txbx//w:p|.//a:p//a:t",
             namespaces=self._BLIP_NAMESPACES,
         )
-        for sec_idx, section in enumerate(docx_obj.sections):
-            if sec_idx > 0 and not section.different_first_page_header_footer:
-                continue
+        emitted_partnames: set[str] = set()
 
-            hdr = (
-                section.first_page_header
-                if section.different_first_page_header_footer
-                else section.header
+        def _add_hdr_ftr_part(part, name: str) -> None:
+            resolved_part = part.part
+            partname = str(resolved_part.partname)
+            if partname in emitted_partnames:
+                return
+            emitted_partnames.add(partname)
+
+            par = [txt for txt in (p.text.strip() for p in part.paragraphs) if txt]
+            tables = part.tables
+            has_blip = self._has_blip(part._element)
+            has_txbx = len(txbx_xpath(part._element)) > 0
+
+            if not (par or tables or has_blip or has_txbx):
+                return
+
+            # A header/footer part is parsed in isolation: reset the whole heading
+            # hierarchy first, otherwise a heading left over from the body (whose
+            # level is still "open") silently steals this content instead of the
+            # group below, since _get_level() picks the first open level, not
+            # necessarily level 0.
+            for i in range(-1, self.max_levels):
+                self.parents[i] = None
+            self.level = 0
+
+            self.parents[0] = doc.add_group(
+                label=GroupLabel.SECTION,
+                name=name,
+                content_layer=self.content_layer,
             )
-            par = [txt for txt in (par.text.strip() for par in hdr.paragraphs) if txt]
-            tables = hdr.tables
-            has_blip = self._has_blip(hdr._element)
-            has_txbx = len(txbx_xpath(hdr._element)) > 0
+            # Each header/footer part is its own code-block scope.
+            self._force_new_code_block = True
+            self._pending_code_blank_lines = 0
+            self.current_part = resolved_part
+            self._walk_linear(part._element, doc)
+            self.current_part = self.docx_obj.part
 
-            if par or tables or has_blip or has_txbx:
-                self.parents[0] = doc.add_group(
-                    label=GroupLabel.SECTION,
-                    name="page header",
-                    content_layer=self.content_layer,
-                )
-                # Each header/footer part is its own code-block scope.
-                self._force_new_code_block = True
-                self._pending_code_blank_lines = 0
-                self.current_part = hdr.part
-                self._walk_linear(hdr._element, doc)
-                self.current_part = self.docx_obj.part
+        for section in docx_obj.sections:
+            if section.different_first_page_header_footer:
+                _add_hdr_ftr_part(section.first_page_header, "page header")
+            _add_hdr_ftr_part(section.header, "page header")
 
-            ftr = (
-                section.first_page_footer
-                if section.different_first_page_header_footer
-                else section.footer
-            )
-            par = [txt for txt in (par.text.strip() for par in ftr.paragraphs) if txt]
-            tables = ftr.tables
-            has_blip = self._has_blip(ftr._element)
-            has_txbx = len(txbx_xpath(ftr._element)) > 0
-
-            if par or tables or has_blip or has_txbx:
-                self.parents[0] = doc.add_group(
-                    label=GroupLabel.SECTION,
-                    name="page footer",
-                    content_layer=self.content_layer,
-                )
-                self._force_new_code_block = True
-                self._pending_code_blank_lines = 0
-                self.current_part = ftr.part
-                self._walk_linear(ftr._element, doc)
-                self.current_part = self.docx_obj.part
+            if section.different_first_page_header_footer:
+                _add_hdr_ftr_part(section.first_page_footer, "page footer")
+            _add_hdr_ftr_part(section.footer, "page footer")
 
         self._force_new_code_block = True
         self._pending_code_blank_lines = 0
         self.content_layer = current_layer
-        self.parents[0] = base_parent
+        self.parents = base_parents
+        self.level = base_level
 
     def _add_comments(self, docx_obj: DocxDocument, doc: DoclingDocument) -> None:
         """Add document comments (reviewer annotations) and link to annotated items.
